@@ -1,0 +1,1 @@
+Parse reports from the Town of Salem Trial System into a format that can be easily used for analysis.
