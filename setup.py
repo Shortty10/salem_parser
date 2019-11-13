@@ -2,7 +2,7 @@ from distutils.core import setup
 setup(
     name='salem_parser',
     packages=['salem_parser'],
-    version='v1.0-beta',
+    version='v1.0.1-beta',
     license='MIT',
     description='A module used to parse reports from the Town of Salem Trial System into a format that can be easily used for data analysis.',
     author='Shortty10',
