@@ -141,6 +141,8 @@ class Report:
 
     def __init__(self, data):
 
+        self.winner = None
+
         soup = data['soup']
 
         content = list(soup.find("div", id="reportContent").find_all("span"))
