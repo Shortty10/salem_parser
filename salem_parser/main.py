@@ -1,3 +1,26 @@
+"""
+MIT License
+
+Copyright (c) 2019 Shortty10
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+"""
 import json
 from datetime import datetime
 import requests
@@ -59,6 +82,33 @@ def parse_report(url):
     data['soup'] = soup
 
     return Report(data)
+
+
+def _get_player(name, players, is_reported=False):
+    data = {}
+    data['all_players'] = players
+    players = json.loads(players)["players"]
+
+    # Check if 'name' is a username
+    if name in [x["username"] for x in players]:
+        data['name'] = name
+        data['type'] = "username"
+        return Player(data)
+
+    # Check if 'name' is an IGN
+    for player in players:
+        if player["ign"] == name:
+            data["type"] = "ign"
+            data['name'] = player["ign"]
+            return Player(data)
+
+    # Return None if we are searching for the reported player. For some reports this is not provided.
+    if is_reported:
+        return None
+
+    # Otherwise, raise ValueError
+    raise ValueError(
+        f"This report could not be processed: Player {name} was not found.")
 
 
 class Report:
@@ -185,7 +235,7 @@ class Report:
         data['content'] = new_list
 
         self.id = int(data["id"])
-        self.reported = get_player(data['user'], str(soup.find_all(
+        self.reported = _get_player(data['user'], str(soup.find_all(
             "script")).split('data =')[1].split("}]};")[0] + "}]}", True)
         self.reason = data["reason"]
         self.details = data["details"]
@@ -193,33 +243,6 @@ class Report:
         self.judgement = data['judgement']
         self.content = data['content']
         self.dt = date
-
-
-def get_player(name, players, is_reported=False):
-    data = {}
-    data['all_players'] = players
-    players = json.loads(players)["players"]
-
-    # Check if 'name' is a username
-    if name in [x["username"] for x in players]:
-        data['name'] = name
-        data['type'] = "username"
-        return Player(data)
-
-    # Check if 'name' is an IGN
-    for player in players:
-        if player["ign"] == name:
-            data["type"] = "ign"
-            data['name'] = player["ign"]
-            return Player(data)
-
-    # Return None if we are searching for the reported player. For some reports this is not provided.
-    if is_reported:
-        return None
-
-    # Otherwise, raise ValueError
-    raise ValueError(
-        f"This report could not be processed: Player {name} was not found.")
 
 
 class Event:
@@ -360,18 +383,19 @@ class Event:
 
         elif 'whisper" title="' in message or 'whisper">' in message:
             self.type = "Whisper"
-            self.author = get_player(message.split(
+            self.author = _get_player(message.split(
                 ' ">')[0].split(" ")[-2], all_players)
-            self.recipient = get_player(message.split(
+            self.recipient = _get_player(message.split(
                 ' ">')[0].split(" ")[-1], all_players)
 
         elif '<span class="notice"' in message and "attacked by" in message:
             self.type = "Death"
             if " was attacked by" in message:
-                self.killed = get_player(message.split(
-                    '">')[1].split(" was attacked by")[0], all_players)
+                self.killed = _get_player(
+                    message.split(
+                        '">')[1].split(" was attacked by")[0], all_players)
             else:
-                self.killed = get_player(message.split(
+                self.killed = _get_player(message.split(
                     ' ">')[1].split(" attacked by")[0], all_players)
             self.killer = message.split(".</span>")[0].split(" ")[-1]
 
@@ -380,55 +404,55 @@ class Event:
             self.killer = "Arsonist"
             killed = message.split('">')[1].split(
                 " was ignited by an Arsonist.</span>")[0]
-            self.killed = get_player(killed, all_players)
+            self.killed = _get_player(killed, all_players)
 
         elif '<span class="notice"' in message and "visited a VampireHunter.</span>" in message:
             self.type = "Death"
             self.killer = "VampireHunter"
             killed = message.split('">')[1].split(
                 " visited a VampireHunter.</span>")[0]
-            self.killed = get_player(killed, all_players)
+            self.killed = _get_player(killed, all_players)
 
         elif '<span class="notice"' in message and " was staked by a VampireHunter.</span>" in message:
             self.type = "Death"
             self.killer = "VampireHunter"
             killed = message.split('">')[1].split(
                 " was staked by a VampireHunter.</span>")[0]
-            self.killed = get_player(killed, all_players)
+            self.killed = _get_player(killed, all_players)
 
         elif '<span class="notice"' in message and "died guarding someone.</span>" in message:
             self.type = "Death"
             self.killer = "Guarding"
             killed = message.split('">')[1].split(
                 " died guarding someone.</span>")[0]
-            self.killed = get_player(killed, all_players)
+            self.killed = _get_player(killed, all_players)
 
         elif '<span class="notice"' in message and " died from guilt over shooting a Town member.</span>" in message:
             self.type = "Death"
             self.killer = "Guilt"
             killed = message.split('">')[1].split(
                 " died from guilt over shooting a Town member.</span>")[0]
-            self.killed = get_player(killed, all_players)
+            self.killed = _get_player(killed, all_players)
 
         elif '<span class="notice"' in message and "visited a SerialKiller.</span>" in message:
             self.type = "Death"
             self.killer = "SerialKiller"
             killed = message.split('">')[1].split(
                 " visited a SerialKiller.</span>")[0]
-            self.killed = get_player(killed, all_players)
+            self.killed = _get_player(killed, all_players)
 
         elif '<span class="notice' in message and ' has been lynched.</span>' in message:
             self.type = "Death"
             self.killer = "Lynch"
             killed = message.split('">')[1].split(
                 " has been lynched.</span>")[0]
-            self.killed = get_player(killed, all_players)
+            self.killed = _get_player(killed, all_players)
 
         elif '<span class="notice"' in message and "has left the game.</span>" in message:
             self.type = "Quit"
             player = message.split('">')[1].split(
                 " has left the game.</span>")[0]
-            self.leaver = get_player(player, all_players)
+            self.leaver = _get_player(player, all_players)
 
         elif '<span class="notice"' in message and 'voted guilty.</span>' in message or 'voted innocent.</span>' in message or 'abstained.</span>' in message:
             self.type = "Vote"
@@ -449,13 +473,13 @@ class Event:
             self.type = "Revive"
             revived = message.split(
                 " has been resurrected.</span>")[0].split('">')[1]
-            self.revived = get_player(revived, all_players)
+            self.revived = _get_player(revived, all_players)
 
         elif '<span class="notice' in message and 'Witch control"' in message:
             self.type = "Witch"
             msg = message.split('">Witch made ')[1].split(" target ")
-            self.witched = get_player(msg[0], all_players)
-            self.witch_target = get_player(
+            self.witched = _get_player(msg[0], all_players)
+            self.witch_target = _get_player(
                 msg[1].split(".</span>")[0], all_players)
 
         elif '<span class="notice"' in message and " has remembered they were " in message:
@@ -463,19 +487,19 @@ class Event:
             self.remembered = message.split(".</span>")[0].split(" ")[-1]
             amne = message.split('">')[1].split(
                 " has remembered they were ")[0]
-            self.amne = get_player(amne, all_players)
+            self.amne = _get_player(amne, all_players)
 
         elif '<span class="notice Vampire convert"' in message:
             self.type = "Conversion"
             converted = message.split('">')[1].split(
                 " was converted from being ")[0]
-            self.converted = get_player(converted, all_players)
+            self.converted = _get_player(converted, all_players)
 
         elif '<span class="notice' in message and '">Transporter swapped ' in message:
             self.type = "Transport"
             msg = message.split('">Transporter swapped ')[1]
-            transported1 = get_player(msg.split(" with ")[0], all_players)
-            transported2 = get_player(
+            transported1 = _get_player(msg.split(" with ")[0], all_players)
+            transported2 = _get_player(
                 msg.split(" with ")[1].split(".</span>")[0], all_players)
             self.transported = [transported1, transported2]
 
@@ -483,7 +507,7 @@ class Event:
             self.type = "Reveal"
             revealer = message.split('">')[1].split(
                 " has revealed themselves as the Mayor.</span>")[0]
-            self.revealer = get_player(revealer, all_players)
+            self.revealer = _get_player(revealer, all_players)
 
         else:
             self.type = "Message"
@@ -493,7 +517,7 @@ class Event:
             self.is_jail = bool('jail">' in message)
 
             name = message.split('class="')[1].split(" ")[0]
-            author = get_player(name, all_players)
+            author = _get_player(name, all_players)
 
             try:
                 details = message.split(": ")[1]
@@ -506,8 +530,26 @@ class Event:
 
 
 class Player:
-    def __init__(self, data):
+    """
+    Represents a player in the game.
 
+    Attributes
+    -------------
+    name: :class:`str`
+        The player's username
+    nick: :class:`str`
+        The player's in game name
+    slot: :class:`int`
+        The player's slot (between 1 and 15)
+    role: :class:`str`
+        The player's role, e.g Mafioso
+    faction: :class:`str
+        The player's faction, e.g Mafia
+    alignment: :class:`str`
+        The player's alignment, e.g Mafia Killing
+    """
+
+    def __init__(self, data):
         name = data['name']
 
         category = data['type']
@@ -521,17 +563,17 @@ class Player:
                 info = player
                 break
 
-        role_info = find_faction(info["role"])
+        role_info = _find_faction(info["role"])
 
         self.name = info["username"]
         self.role = info["role"]
-        self.slot = info["slot"]
+        self.slot = int(info["slot"])
         self.nick = info["ign"]
         self.faction = role_info["faction"]
         self.alignment = role_info["alignment"]
 
 
-def find_faction(role):
+def _find_faction(role):
 
     if role == "BodyGuard":
         role_info = {"faction": "Town", "alignment": "Town Protective"}
