@@ -197,9 +197,23 @@ class Report:
             elif '<span class="Vampire vampire" title="">*Vampires have bit ' in message:
                 content.remove(message)
 
+            # Remove "has forged the will" notices
+            elif '<span class="notice"' in message and ' has forged the will.</span>' in message:
+                content.remove(message)
+
             # Remove glitched messages
             elif '<span class="" title=""></span>' in message:
                 content.remove(message)
+
+            else:
+                try:
+                    class_ = message.split(
+                        '<span class="')[1].split('" title="">')[0]
+                    int(class_[1:2])
+                    if class_.startswith("N"):
+                        content.remove(message)
+                except (IndexError, ValueError):
+                    pass
 
         new_list = []
 
@@ -310,6 +324,9 @@ class Event:
     witch_target: :class:`Player`
         The target who the player was witched into.
         Returns None if the event was not a witch.
+    witcher: :class:`str`
+        The role that witched the player. Always returns "Witch" or "CovenLeader"
+        Returns None if the event was not a witch.
     amne: :class:`Player`
         The amnesiac who remembered they were like a role.
         Returns None if the event was not a remember.
@@ -330,7 +347,6 @@ class Event:
     def __init__(self, data):
         message = data['msg']
         all_players = data['players']
-
         self.day = None
         self.night = None
         self.message = None
@@ -349,6 +365,7 @@ class Event:
         self.revived = None
         self.witched = None
         self.witch_target = None
+        self.witcher = None
         self.amne = None
         self.remembered = None
         self.converted = None
@@ -371,13 +388,13 @@ class Event:
         elif '<span class="stage">Judgement</span>' in message:
             self.type = "Judgement"
 
-        elif '<span class="notice Investigator"' in message:
+        elif '<span class="notice Investigator"' in message or '<span class="notice' in message and 'Investigator" title="' in message:
             self.type = "Investigation"
             self.visitor = message.split(">")[1].split(" investigated ")[0]
             self.visited = message.split(
                 ".</span>")[0].split(" investigated ")[1]
 
-        elif '<span class="notice Sheriff"' in message:
+        elif '<span class="notice Sheriff"' in message or '<span class="notice' in message and 'Sheriff" title="' in message:
             self.type = "Sheriff"
             self.visitor = message.split(">")[1].split(" checked ")[0]
             self.visited = message.split(
@@ -479,7 +496,8 @@ class Event:
 
         elif '<span class="notice' in message and 'Witch control"' in message:
             self.type = "Witch"
-            msg = message.split('">Witch made ')[1].split(" target ")
+            self.witcher = message.split('">')[1].split(" ")[0]
+            msg = message.split(f'">{self.witcher} made ')[1].split(" target ")
             self.witched = _get_player(msg[0], all_players)
             self.witch_target = _get_player(
                 msg[1].split(".</span>")[0], all_players)
@@ -645,7 +663,7 @@ def _find_faction(role):
         role_info = {"faction": "Neutral", "alignment": "Neutral Killing"}
     elif role == "Executioner":
         role_info = {"faction": "Neutral", "alignment": "Neutral Evil"}
-    elif role == "GuardianAngel":
+    elif role == "Guardian Angel":
         role_info = {"faction": "Neutral", "alignment": "Neutral Benign"}
     elif role == "Jester":
         role_info = {"faction": "Neutral", "alignment": "Neutral Evil"}
@@ -664,6 +682,9 @@ def _find_faction(role):
     elif role == "Werewolf":
         role_info = {"faction": "Neutral", "alignment": "Neutral Killing"}
     elif role == "Witch":
-        role_info = {"faction": "Neutral", "alignment": "Neutral Evil1"}
+        role_info = {"faction": "Neutral", "alignment": "Neutral Evil"}
+
+    elif role in ["Coven Leader", "Potion Master", "HexMaster", "Necromancer", "Poisoner", "Medusa"]:
+        role_info = {"faction": "Coven", "alignment": "Coven"}
 
     return role_info
