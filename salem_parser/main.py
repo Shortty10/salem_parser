@@ -204,16 +204,20 @@ class Report:
             # Remove glitched messages
             elif '<span class="" title=""></span>' in message:
                 content.remove(message)
-
             else:
                 try:
                     class_ = message.split(
-                        '<span class="')[1].split('" title="">')[0]
-                    int(class_[1:2])
-                    if class_.startswith("N"):
+                        '<span class="')[1].split('" title="">')[0].replace(" ", "")
+                    txt = message.split('" title="">')[
+                        1].split("</span>")[0].replace(" ", "")
+                    if not class_ in ['notice', 'time day', 'time night', 'stage'] and class_ in txt:
                         content.remove(message)
+                        continue
                 except (IndexError, ValueError):
                     pass
+                if '<span class="notice' in message and 'Witch control"' in message:
+                    if not 'made' in message and 'target' in message:
+                        content.remove(message)
 
         new_list = []
 
@@ -295,6 +299,7 @@ class Event:
         Returns "Guilt" when a vigilante shoots themselves.
         Returns "Guarding" when a bodyguard dies protecting someone.
         Returns "Lynch" if the player was lynched.
+        Returns "Heartbreak" if the player died from heartbreak.
         Returns None if the event was not a death.
     visitor: :class:`Player`
         The player who visited.
@@ -415,7 +420,7 @@ class Event:
                         '">')[1].split(" was attacked by")[0], all_players)
             else:
                 self.killed = _get_player(message.split(
-                    ' ">')[1].split(" attacked by")[0], all_players)
+                    '">')[1].split(" attacked by")[0], all_players)
             self.killer = message.split(".</span>")[0].split(" ")[-1]
 
         elif '<span class="notice"' in message and ' was ignited by an Arsonist.</span>' in message:
@@ -465,6 +470,13 @@ class Event:
             self.killer = "Lynch"
             killed = message.split('">')[1].split(
                 " has been lynched.</span>")[0]
+            self.killed = _get_player(killed, all_players)
+
+        elif '<span class="notice"' in message and ' died from heartbreak.</span>' in message:
+            self.type = "Death"
+            self.killer = "Heartbreak"
+            killed = message.split('">')[1].split(
+                " died from heartbreak.</span>")[0]
             self.killed = _get_player(killed, all_players)
 
         elif '<span class="notice"' in message and "has left the game.</span>" in message:
@@ -517,10 +529,27 @@ class Event:
 
         elif '<span class="notice' in message and '">Transporter swapped ' in message:
             self.type = "Transport"
-            msg = message.split('">Transporter swapped ')[1]
-            transported1 = _get_player(msg.split(" with ")[0], all_players)
-            transported2 = _get_player(
-                msg.split(" with ")[1].split(".</span>")[0], all_players)
+            msg = message.split('">Transporter swapped ')[1].split(" with ")
+            if len(msg) < 3:
+                transported1 = _get_player(msg[0], all_players)
+                transported2 = _get_player(
+                    msg[1].split(".</span>")[0], all_players)
+            else:
+                count = 0
+                while count <= len(msg):
+                    try:
+                        first = msg[count] + " with " + msg[count + 1]
+                        second = msg[count + 2]
+                        transported1 = _get_player(first, all_players)
+                        transported2 = _get_player(
+                            second.split(".</span>")[0], all_players)
+                        break
+                    except (ValueError, IndexError) as error:
+                        if isinstance(error, ValueError):
+                            count += 1
+                        elif isinstance(error, IndexError):
+                            raise ValueError(
+                                "There was an error processing this report.")
             self.transported = [transported1, transported2]
 
         elif '<span class="notice"' in message and "has revealed themselves as the Mayor.</span>" in message:
