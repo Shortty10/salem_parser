@@ -151,14 +151,12 @@ class Report:
             'data =')[1].split("}]};")[0] + "}]}"
 
         date = soup.find("span", class_="reportDate").text
-        if date[-8:-7] != " ":
-            date = datetime.strptime(
-                date, "%b. %d, %Y %I:%M %p").timestamp()
-        else:
+
+        if date[-8:-7] == " ":
             date = date[:14] + "0" + date[14:]
-            date = datetime.strptime(
-                date, "%b. %d, %Y %I:%M %p").timestamp()
-        date = int(date)
+
+        date = int(datetime.strptime(
+            date, "%b. %d, %Y %I:%M %p").timestamp())
 
         game_over = False
 
@@ -216,7 +214,7 @@ class Report:
                 except (IndexError, ValueError):
                     pass
                 if '<span class="notice' in message and 'Witch control"' in message:
-                    if not 'made' in message and 'target' in message:
+                    if not 'made' in message or not 'target' in message:
                         content.remove(message)
 
         new_list = []
@@ -330,7 +328,7 @@ class Event:
         The target who the player was witched into.
         Returns None if the event was not a witch.
     witcher: :class:`str`
-        The role that witched the player. Always returns "Witch" or "CovenLeader"
+        The role that witched the player. Always returns "Witch", "CovenLeader" or "Necromancer"
         Returns None if the event was not a witch.
     amne: :class:`Player`
         The amnesiac who remembered they were like a role.
@@ -395,9 +393,10 @@ class Event:
 
         elif '<span class="notice Investigator"' in message or '<span class="notice' in message and 'Investigator" title="' in message:
             self.type = "Investigation"
-            self.visitor = message.split(">")[1].split(" investigated ")[0]
-            self.visited = message.split(
-                ".</span>")[0].split(" investigated ")[1]
+            self.visitor = _get_player(message.split(
+                ">")[1].split(" investigated ")[0], all_players)
+            self.visited = _get_player(message.split(
+                ".</span>")[0].split(" investigated ")[1], all_players)
 
         elif '<span class="notice Sheriff"' in message or '<span class="notice' in message and 'Sheriff" title="' in message:
             self.type = "Sheriff"
@@ -507,12 +506,38 @@ class Event:
             self.revived = _get_player(revived, all_players)
 
         elif '<span class="notice' in message and 'Witch control"' in message:
+            error_found = False
+            witched_error = False
+            witch_target_error = False
             self.type = "Witch"
             self.witcher = message.split('">')[1].split(" ")[0]
-            msg = message.split(f'">{self.witcher} made ')[1].split(" target ")
-            self.witched = _get_player(msg[0], all_players)
-            self.witch_target = _get_player(
-                msg[1].split(".</span>")[0], all_players)
+            msg = message.split(f'">{self.witcher} made ')[
+                1].split(" target ")
+            try:
+                self.witched = _get_player(msg[0], all_players)
+            except ValueError:
+                witched_error = True
+            try:
+                self.witch_target = _get_player(
+                    msg[-1].split(".</span>")[0], all_players)
+            except ValueError:
+                witch_target_error = True
+
+            if witched_error and not witch_target_error:
+                count = 0
+                try:
+                    msg = message.split('">')[1].split(
+                        " made ")[1].split(".</span>")[0]
+                    witched = msg.split(f" target {self.witch_target.nick}")[0]
+                    self.witched = _get_player(witched, all_players)
+
+                except ValueError as error:
+                    error_found = True
+                if error_found:
+                    raise ValueError(
+                        "There was an error processing this report.")
+            elif witched_error or witch_target_error:
+                raise ValueError("There was an error processing this report.")
 
         elif '<span class="notice"' in message and " has remembered they were " in message:
             self.type = "Remember"
@@ -559,13 +584,15 @@ class Event:
             self.revealer = _get_player(revealer, all_players)
 
         else:
+            error_found = False
+
             self.type = "Message"
 
             self.is_mafia = bool('mafia">' in message)
 
             self.is_jail = bool('jail">' in message)
 
-            name = message.split('class="')[1].split(" ")[0]
+            name = message.split(f'<span class="')[1].split(" ")[0]
             author = _get_player(name, all_players)
 
             try:
