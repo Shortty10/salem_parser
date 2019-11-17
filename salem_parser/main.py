@@ -400,9 +400,10 @@ class Event:
 
         elif '<span class="notice Sheriff"' in message or '<span class="notice' in message and 'Sheriff" title="' in message:
             self.type = "Sheriff"
-            self.visitor = message.split(">")[1].split(" checked ")[0]
-            self.visited = message.split(
-                ".</span>")[0].split(" checked ")[1]
+            self.visitor = _get_player(message.split(
+                ">")[1].split(" checked ")[0], all_players)
+            self.visited = _get_player(message.split(
+                ".</span>")[0].split(" checked ")[1], all_players)
 
         elif 'whisper" title="' in message or 'whisper">' in message:
             self.type = "Whisper"
