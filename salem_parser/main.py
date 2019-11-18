@@ -262,6 +262,9 @@ class Report:
         self.content = data['content']
         self.dt = date
 
+    def __repr__(self):
+        return self.id
+
 
 class Event:
     """
@@ -605,6 +608,9 @@ class Event:
             self.author = author
             self.message = details
 
+        def __repr__(self):
+            return self.nick
+
 
 class Player:
     """
@@ -648,6 +654,9 @@ class Player:
         self.nick = info["ign"]
         self.faction = role_info["faction"]
         self.alignment = role_info["alignment"]
+
+    def __repr__(self):
+        return self.nick
 
 
 def _find_faction(role):
