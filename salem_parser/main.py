@@ -280,7 +280,7 @@ class Event:
         Returns None if the event was not a new night.
     message: :class:`str`
         The message sent.
-        Returns None if the event was not a message.
+        Returns None if the event was not a message or whisper.
     is_jail: :class:`bool`
         Returns True if the message was sent in jail, otherwise False.
         Returns None if the event was not a message.
@@ -414,6 +414,7 @@ class Event:
                 ' ">')[0].split(" ")[-2], all_players)
             self.recipient = _get_player(message.split(
                 ' ">')[0].split(" ")[-1], all_players)
+            self.message = message.split(":", 1)[1].split("</span>")[0].strip()
 
         elif '<span class="notice"' in message and "attacked by" in message:
             self.type = "Death"
@@ -608,8 +609,8 @@ class Event:
             self.author = author
             self.message = details
 
-        def __repr__(self):
-            return self.nick
+    def __repr__(self):
+        return self.type
 
 
 class Player:
