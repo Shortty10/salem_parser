@@ -29,7 +29,7 @@ from bs4 import BeautifulSoup
 
 def parse_report(url):
     """
-    Parse the report's HTML into a report object.
+    Parse the report's HTML into a Report object.
 
     Parameters
     -------------
@@ -39,17 +39,19 @@ def parse_report(url):
     Raises
     -------------
     ValueError
-        Invalid ID
+        Parsing failed (Invalid ID / Glitched report)
 
     Returns
     -------------
     :class:`Report`
-        The report object.
+        The Report object.
     """
     request = requests.get(url).text
-    if request == "Could not find any reports with that ID.":
+    if request in ["Could not find any reports with that ID.", "No report file found."]:
         raise ValueError("Report not found.")
     soup = BeautifulSoup(request, "lxml")
+
+    data = {}
 
     judgement = soup.find("div", id="splash")
     if not judgement:
@@ -60,8 +62,6 @@ def parse_report(url):
         judgement = "Guilty"
     elif judgement.text == "This report has been deemed innocent.":
         judgement = "Innocent"
-
-    data = {}
 
     data['judgement'] = judgement
 
@@ -81,13 +81,22 @@ def parse_report(url):
 
     data['soup'] = soup
 
-    return Report(data)
+    try:
+        return Report(data)
+    except Exception:
+        error_found = True
+    if error_found:
+        raise ValueError("There was an error processing this report.")
 
 
-def _get_player(name, players, is_reported=False):
+def _get_player(name, players):
     data = {}
     data['all_players'] = players
     players = json.loads(players)["players"]
+
+    # Fix bugged usernames
+    if "(" in name:
+        name = name.split("(")[0]
 
     # Check if 'name' is a username
     if name in [x["username"] for x in players]:
@@ -102,13 +111,10 @@ def _get_player(name, players, is_reported=False):
             data['name'] = player["ign"]
             return Player(data)
 
-    # Return None if we are searching for the reported player. For some reports this is not provided.
-    if is_reported:
-        return None
-
-    # Otherwise, raise ValueError
-    raise ValueError(
-        f"This report could not be processed: Player {name} was not found.")
+    # Otherwise, the report is bugged.
+    # This is extremely rare (occurs in about 0.3% of reports).
+    # Returns None to avoid an error.
+    return None
 
 
 class Report:
@@ -200,7 +206,9 @@ class Report:
                 content.remove(message)
 
             # Remove glitched messages
-            elif '<span class="" title=""></span>' in message:
+            elif '<span class="" title=""></span>' in message or '<span class="seance" title=""></span>' in message:
+                content.remove(message)
+            elif '<span class="notice' in message and 'jail" title="' in message:
                 content.remove(message)
             else:
                 try:
@@ -248,13 +256,14 @@ class Report:
             event_data['msg'] = message
             event_data['players'] = players
             event_data['index'] = content.index(message)
+            event_data['id'] = data['id']
             new_list.append(Event(event_data))
 
         data['content'] = new_list
 
         self.id = int(data["id"])
         self.reported = _get_player(data['user'], str(soup.find_all(
-            "script")).split('data =')[1].split("}]};")[0] + "}]}", True)
+            "script")).split('data =')[1].split("}]};")[0] + "}]}")
         self.reason = data["reason"]
         self.details = data["details"]
         self.is_ranked = data['ranked']
@@ -263,7 +272,7 @@ class Report:
         self.dt = date
 
     def __repr__(self):
-        return self.id
+        return str(self.id)
 
 
 class Event:
@@ -378,12 +387,14 @@ class Event:
         self.transported = None
         self.revealer = None
 
-        if '<span class="time night">' in message:
+        broken_roles = ["Potion Master"]
+
+        if '<span class="time night">Night' in message:
             self.type = "Night"
             self.night = int(message.split(
                 "</span>")[0].split('<span class="time night">Night ')[1])
 
-        elif '<span class="time day">' in message:
+        elif '<span class="time day">Day' in message:
             self.type = "Day"
             self.day = int(message.split("</span>")
                            [0].split('<span class="time day">Day ')[1])
@@ -394,34 +405,63 @@ class Event:
         elif '<span class="stage">Judgement</span>' in message:
             self.type = "Judgement"
 
-        elif '<span class="notice Investigator"' in message or '<span class="notice' in message and 'Investigator" title="' in message:
+        elif " investigated " in message and ('<span class="notice Investigator"' in message or ('<span class="notice ' in message and 'Investigator" title="' in message)):
             self.type = "Investigation"
-            self.visitor = _get_player(message.split(
-                ">")[1].split(" investigated ")[0], all_players)
+            visitor = message.split(">")[1].split(" investigated ")[0]
+            try:
+                self.visitor = _get_player(visitor, all_players)
+            except ValueError:
+                visitor = visitor.replace(
+                    " ", "") if visitor in broken_roles else visitor
+                self.visitor = _get_player(visitor, all_players)
             self.visited = _get_player(message.split(
                 ".</span>")[0].split(" investigated ")[1], all_players)
 
-        elif '<span class="notice Sheriff"' in message or '<span class="notice' in message and 'Sheriff" title="' in message:
+        elif '<span class="notice Sheriff"' in message or ('<span class="notice ' in message and 'Sheriff" title="' in message) and ' checked ' in message:
             self.type = "Sheriff"
-            self.visitor = _get_player(message.split(
-                ">")[1].split(" checked ")[0], all_players)
-            self.visited = _get_player(message.split(
-                ".</span>")[0].split(" checked ")[1], all_players)
+            visited = message.split(".</span>")[0].split(" checked ")[1]
+            visitor = message.split(">")[1].split(" checked ")[0]
+            self.visitor = _get_player(visitor, all_players)
+            self.visited = _get_player(visited, all_players)
 
         elif 'whisper" title="' in message or 'whisper">' in message:
             self.type = "Whisper"
-            self.author = _get_player(message.split(
-                ' ">')[0].split(" ")[-2], all_players)
-            self.recipient = _get_player(message.split(
-                ' ">')[0].split(" ")[-1], all_players)
-            self.message = message.split(":", 1)[1].split("</span>")[0].strip()
+            author = message.split(' ">')[0].split(" ")[-2]
+            recipient = message.split(' ">')[0].split(" ")[-1]
+
+            try:
+                self.author = _get_player(author, all_players)
+            except ValueError:
+                author = message.split(' ">')[0].split(
+                    " ")[-2] + " " + message.split(' ">')[0].split(" ")[-1]
+                self.author = _get_player(author, all_players)
+
+            try:
+                self.recipient = _get_player(recipient, all_players)
+            except ValueError:
+                try:
+                    recipient = message.split(' ">')[0].split(
+                        " ")[-2] + " " + message.split(' ">')[0].split(" ")[-1]
+                    self.recipient = _get_player(
+                        recipient, all_players)
+                except ValueError:
+                    recipient = message.split(
+                        '">')[1].split(" to ")[1].split(": ")[0]
+                    self.recipient = _get_player(
+                        recipient, all_players)
+
+            try:
+                self.message = message.split(
+                    ":", 1)[1].split("</span>")[0].strip()
+            except IndexError:
+                self.message = ""
 
         elif '<span class="notice"' in message and "attacked by" in message:
             self.type = "Death"
             if " was attacked by" in message:
-                self.killed = _get_player(
-                    message.split(
-                        '">')[1].split(" was attacked by")[0], all_players)
+                killed = message.split('">')[1].split(" was attacked by")[0]
+                self.killed = _get_player(killed, all_players)
+
             else:
                 self.killed = _get_player(message.split(
                     '">')[1].split(" attacked by")[0], all_players)
@@ -474,7 +514,12 @@ class Event:
             self.killer = "Lynch"
             killed = message.split('">')[1].split(
                 " has been lynched.</span>")[0]
-            self.killed = _get_player(killed, all_players)
+            try:
+                self.killed = _get_player(killed, all_players)
+            except ValueError:
+                killed = killed.replace(
+                    " ", "") if killed in broken_roles else killed
+                self.killed = _get_player(killed, all_players)
 
         elif '<span class="notice"' in message and ' died from heartbreak.</span>' in message:
             self.type = "Death"
@@ -511,9 +556,6 @@ class Event:
             self.revived = _get_player(revived, all_players)
 
         elif '<span class="notice' in message and 'Witch control"' in message:
-            error_found = False
-            witched_error = False
-            witch_target_error = False
             self.type = "Witch"
             self.witcher = message.split('">')[1].split(" ")[0]
             msg = message.split(f'">{self.witcher} made ')[
@@ -521,28 +563,17 @@ class Event:
             try:
                 self.witched = _get_player(msg[0], all_players)
             except ValueError:
-                witched_error = True
-            try:
-                self.witch_target = _get_player(
-                    msg[-1].split(".</span>")[0], all_players)
-            except ValueError:
-                witch_target_error = True
-
-            if witched_error and not witch_target_error:
-                count = 0
                 try:
-                    msg = message.split('">')[1].split(
-                        " made ")[1].split(".</span>")[0]
-                    witched = msg.split(f" target {self.witch_target.nick}")[0]
-                    self.witched = _get_player(witched, all_players)
+                    msg = message.split(f'">{self.witcher} made ')[
+                        1].rsplit(" target ")
+                    self.witched = _get_player(msg[0], all_players)
+                except ValueError:
+                    msg[0] = msg[0].replace(
+                        " ", "") if msg[0] in broken_roles else msg[0]
+                    self.witched = _get_player(msg[0], all_players)
 
-                except ValueError as error:
-                    error_found = True
-                if error_found:
-                    raise ValueError(
-                        "There was an error processing this report.")
-            elif witched_error or witch_target_error:
-                raise ValueError("There was an error processing this report.")
+            self.witch_target = _get_player(
+                msg[-1].split(".</span>")[0], all_players)
 
         elif '<span class="notice"' in message and " has remembered they were " in message:
             self.type = "Remember"
@@ -560,26 +591,15 @@ class Event:
         elif '<span class="notice' in message and '">Transporter swapped ' in message:
             self.type = "Transport"
             msg = message.split('">Transporter swapped ')[1].split(" with ")
-            if len(msg) < 3:
-                transported1 = _get_player(msg[0], all_players)
+            transported1 = _get_player(msg[0], all_players)
+            try:
                 transported2 = _get_player(
                     msg[1].split(".</span>")[0], all_players)
-            else:
-                count = 0
-                while count <= len(msg):
-                    try:
-                        first = msg[count] + " with " + msg[count + 1]
-                        second = msg[count + 2]
-                        transported1 = _get_player(first, all_players)
-                        transported2 = _get_player(
-                            second.split(".</span>")[0], all_players)
-                        break
-                    except (ValueError, IndexError) as error:
-                        if isinstance(error, ValueError):
-                            count += 1
-                        elif isinstance(error, IndexError):
-                            raise ValueError(
-                                "There was an error processing this report.")
+            except ValueError:
+                msg = message.split('">Transporter swapped ')[
+                    1].rsplit(" with ")
+                transported2 = _get_player(
+                    msg[0].split(".</span>")[0], all_players)
             self.transported = [transported1, transported2]
 
         elif '<span class="notice"' in message and "has revealed themselves as the Mayor.</span>" in message:
@@ -589,16 +609,22 @@ class Event:
             self.revealer = _get_player(revealer, all_players)
 
         else:
-            error_found = False
-
             self.type = "Message"
 
             self.is_mafia = bool('mafia">' in message)
 
             self.is_jail = bool('jail">' in message)
 
-            name = message.split(f'<span class="')[1].split(" ")[0]
-            author = _get_player(name, all_players)
+            try:
+                name = message.split('<span class="')[1].split(" ")[0]
+            except IndexError:
+                name = ""
+            try:
+                author = _get_player(name, all_players)
+            except ValueError:
+                name = message.split('<span class="')[1].split(
+                    " ")[0] + " " + message.split('<span class="')[1].split(" ")[1]
+                author = _get_player(name, all_players)
 
             try:
                 details = message.split(": ")[1]
