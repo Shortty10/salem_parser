@@ -255,8 +255,6 @@ class Report:
             event_data = {}
             event_data['msg'] = message
             event_data['players'] = players
-            event_data['index'] = content.index(message)
-            event_data['id'] = data['id']
             new_list.append(Event(event_data))
 
         data['content'] = new_list
