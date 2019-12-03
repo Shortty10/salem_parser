@@ -232,7 +232,7 @@ class Report:
                 game_over = True
                 continue
 
-            if 'class="notice">' in message:
+            if 'class="notice"' in message:
 
                 # Find if the message contains the winner
                 if "has won.</span>" in message:
