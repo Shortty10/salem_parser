@@ -2,12 +2,12 @@ from distutils.core import setup
 setup(
     name='salem_parser',
     packages=['salem_parser'],
-    version='v1.0',
+    version='v1.0.1',
     license='MIT',
     description='A module used to parse reports from the Town of Salem Trial System into a format that can be easily used for data analysis.',
     author='Shortty10',
     url='https://github.com/Shortty10/salem_parser',
-    download_url='https://github.com/Shortty10/salem_parser/archive/v1.0.tar.gz',
+    download_url='https://github.com/Shortty10/salem_parser/archive/v1.0.1.tar.gz',
     keywords=['Town', 'of', 'Salem'],
     install_requires=[
         'requests',
