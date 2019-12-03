@@ -233,17 +233,16 @@ class Report:
                 continue
 
             if 'class="notice"' in message:
-
                 # Find if the message contains the winner
                 if "has won.</span>" in message:
                     winner = message.split('">')[
                         1].split(" has won.</span>")[0]
                     self.winner = winner
                     break
-                if message == '<span title="  " class="notice">Stalemate.</span>':
+                if '">Stalemate.</span>' in message:
                     self.winner = "Stalemate"
                     break
-                if message == '<span title="  " class="notice">Draw.</span>':
+                if '>Draw.</span>' in message:
                     self.winner = "Draw"
                     break
 
