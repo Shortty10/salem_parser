@@ -74,12 +74,25 @@ def parse_report(url):
     data['ranked'] = bool("Ranked Game." in soup.find(
         "span", class_="notice").text)
 
+    data['players'] = str(soup.find_all("script")).split(
+        'data =')[1].split("}]};")[0] + "}]}"
+
+    data['content'] = list(
+        soup.find("div", id="reportContent").find_all("span"))
+
+    data['reported'] = _get_player(data['user'], str(soup.find_all(
+        "script")).split('data =')[1].split("}]};")[0] + "}]}")
+
+    data['date'] = soup.find("span", class_="reportDate").text
+
     data['details'] = str(soup.find("span", class_='reportDescription')).split(
         '<span class="reportDescription">')[1].split('</span>')[0].split("<br/>")
 
     data['details'] = [] if data['details'] == [''] else data['details']
 
-    data['soup'] = soup
+    # Unescape HTML
+    data['details'] = [msg.replace("&gt;", ">").replace(
+        "&amp;", "&") for msg in data['details']]
 
     try:
         return Report(data)
@@ -141,35 +154,32 @@ class Report:
     dt: :class:`int`
         The time in seconds between the epoch and the time the report was submitted.
     winner: :class:`str`
-        The faction that won the game. e.g "Mafia", "Town"
-        Returns "Stalemate" for draws.
+        The faction that won the game. e.g "Mafia", "Town".
+        Can also return "Stalemate" or "Draw".
+        Can sometimes return None for reports submitted before December 2017.
     """
 
     def __init__(self, data):
 
         self.winner = None
 
-        soup = data['soup']
+        content = data['content']
 
-        content = list(soup.find("div", id="reportContent").find_all("span"))
+        players = data['players']
 
-        players = str(soup.find_all("script")).split(
-            'data =')[1].split("}]};")[0] + "}]}"
+        content = data['content']
 
-        date = soup.find("span", class_="reportDate").text
-
+        # Convert date to POSIX timestamp
+        date = data['date']
         if date[-8:-7] == " ":
             date = date[:14] + "0" + date[14:]
-
         date = int(datetime.strptime(
             date, "%b. %d, %Y %I:%M %p").timestamp())
 
         game_over = False
 
         # Convert elements from Soup to string
-        for message in content[::]:
-            content.remove(message)
-            content.append(str(message))
+        content = [str(message) for message in content]
 
         # Remove all messages before day 1
         content = content[content.index(
@@ -262,14 +272,13 @@ class Report:
         data['content'] = new_list
 
         self.id = int(data["id"])
-        self.reported = _get_player(data['user'], str(soup.find_all(
-            "script")).split('data =')[1].split("}]};")[0] + "}]}")
+        self.reported = data['reported']
         self.reason = data["reason"]
         self.details = data["details"]
         self.is_ranked = data['ranked']
         self.judgement = data['judgement']
         self.content = data['content']
-        self.dt = date
+        self.dt = data['date']
 
     def __repr__(self):
         return str(self.id)
@@ -634,6 +643,10 @@ class Event:
 
             self.author = author
             self.message = details
+
+            # Unescape HTML
+            self.message = self.message.replace("&gt;", ">").replace(
+                "&amp;", "&") if self.message else self.message
 
     def __repr__(self):
         return self.type
