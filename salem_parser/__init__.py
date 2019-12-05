@@ -9,6 +9,6 @@ __title__ = "salem_parser"
 __author__ = "Shortty10"
 __license__ = "MIT"
 __copyright__ = "Copyright 2019 Shortty10"
-__version__ = "1.0.3"
+__version__ = "1.1"
 
 from .main import parse_report
