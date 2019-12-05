@@ -80,9 +80,6 @@ def parse_report(url):
     data['content'] = list(
         soup.find("div", id="reportContent").find_all("span"))
 
-    data['reported'] = _get_player(data['user'], str(soup.find_all(
-        "script")).split('data =')[1].split("}]};")[0] + "}]}")
-
     data['date'] = soup.find("span", class_="reportDate").text
 
     data['details'] = str(soup.find("span", class_='reportDescription')).split(
@@ -97,8 +94,6 @@ def parse_report(url):
     try:
         return Report(data)
     except Exception:
-        error_found = True
-    if error_found:
         raise ValueError("There was an error processing this report.")
 
 
@@ -118,11 +113,10 @@ def _get_player(name, players):
         return Player(data)
 
     # Check if 'name' is an IGN
-    for player in players:
-        if player["ign"] == name:
-            data["type"] = "ign"
-            data['name'] = player["ign"]
-            return Player(data)
+    if name in [x["ign"] for x in players]:
+        data['name'] = name
+        data['type'] = "ign"
+        return Player(data)
 
     # Otherwise, the report is bugged.
     # This is extremely rare (occurs in about 0.3% of reports).
@@ -140,7 +134,6 @@ class Report:
         The report ID.
     reported: :class:`Player`
         The reported player.
-        Can return None if the reported player was not provided in the report.
     reason: :class:`str`
         The reason for the report. e.g Gamethrowing, Cheating, Spamming.
     details: [:class:`str`]
@@ -153,6 +146,8 @@ class Report:
         The report's events. e.g messages, deaths, trials etc.
     dt: :class:`int`
         The time in seconds between the epoch and the time the report was submitted.
+    players: [:class:`Player`]
+        The players who took part in the game.
     winner: :class:`str`
         The faction that won the game. e.g "Mafia", "Town".
         Can also return "Stalemate" or "Draw".
@@ -163,9 +158,27 @@ class Report:
 
         self.winner = None
 
-        content = data['content']
+        self.players = []
 
         players = data['players']
+
+        plys = json.loads(players)['players']
+        for player in plys:
+            retry = False
+            try:
+                self.players.append(_get_player(player['username'], players))
+                if not self.players[-1]:
+                    self.players.pop()
+                    retry = True
+            except KeyError:
+                retry = True
+            if retry:
+                try:
+                    self.players.append(_get_player(player['ign'], players))
+                except KeyError:
+                    self.players.append(None)
+
+        reported = _get_player(data['user'], players)
 
         content = data['content']
 
@@ -271,8 +284,8 @@ class Report:
 
         data['content'] = new_list
 
+        self.reported = reported
         self.id = int(data["id"])
-        self.reported = data['reported']
         self.reason = data["reason"]
         self.details = data["details"]
         self.is_ranked = data['ranked']
@@ -428,8 +441,14 @@ class Event:
 
         elif '<span class="notice Sheriff"' in message or ('<span class="notice ' in message and 'Sheriff" title="' in message) and ' checked ' in message:
             self.type = "Sheriff"
-            visited = message.split(".</span>")[0].split(" checked ")[1]
-            visitor = message.split(">")[1].split(" checked ")[0]
+            try:
+                visited = message.split(".</span>")[0].split(" checked ")[1]
+            except IndexError:
+                visited = ""
+            try:
+                visitor = message.split(">")[1].split(" checked ")[0]
+            except IndexError:
+                visitor = ""
             self.visitor = _get_player(visitor, all_players)
             self.visited = _get_player(visited, all_players)
 
