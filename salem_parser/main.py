@@ -207,10 +207,6 @@ class Report:
             elif 'dead">' in message or 'dead" title="' in message:
                 content.remove(message)
 
-            # Remove "decided to execute" messages. We will instead use the player's death message.
-            elif '<span class="notice' in message and " decided to execute " in message:
-                content.remove(message)
-
             # Remove "has died" messages. We will instead use "was attacked by" messages to find deaths.
             elif '<span class="notice' in message and 'death"' in message:
                 if not ' has been lynched.</span>' in message:
@@ -230,8 +226,6 @@ class Report:
 
             # Remove glitched messages
             elif '<span class="" title=""></span>' in message or '<span class="seance" title=""></span>' in message:
-                content.remove(message)
-            elif '<span class="notice' in message and 'jail" title="' in message:
                 content.remove(message)
             else:
                 try:
@@ -548,6 +542,13 @@ class Event:
                 killed = killed.replace(
                     " ", "") if killed in broken_roles else killed
                 self.killed = _get_player(killed, all_players)
+
+        elif '<span class="notice Jailor ' in message and ' decided to execute ' in message:
+            self.type = "Death"
+            self.killer = "Jailor"
+            killed = message.split(" decided to execute ")[
+                1].split('.</span>')[0]
+            self.killed = _get_player(killed, all_players)
 
         elif '<span class="notice"' in message and ' died from heartbreak.</span>' in message:
             self.type = "Death"
