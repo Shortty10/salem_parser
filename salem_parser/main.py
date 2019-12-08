@@ -640,9 +640,9 @@ class Event:
         else:
             self.type = "Message"
 
-            self.is_mafia = bool('mafia">' in message)
+            self.is_mafia = bool('mafia" title="' in message)
 
-            self.is_jail = bool('jail">' in message)
+            self.is_jail = bool('jail" title="' in message)
 
             try:
                 name = message.split('<span class="')[1].split(" ")[0]
