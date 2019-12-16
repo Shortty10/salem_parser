@@ -197,8 +197,9 @@ class Report:
         # Find if anyone left before day 1
         for message in content[:content.index('<span class="time day">Day 1</span>')]:
             if '<span class="notice"' in message and "has left the game.</span>" in message:
-                content.insert(content.index(
-                    '<span class="time day">Day 1</span>') + 1, message)
+                if message != '<span class="notice" title="  "> has left the game.</span>':
+                    content.insert(content.index(
+                        '<span class="time day">Day 1</span>') + 1, message)
 
         # Remove all messages before day 1
         content = content[content.index(
@@ -573,13 +574,14 @@ class Event:
             voter = message.split('">')[1]
             if verdict == "abstained":
                 self.verdict = "Abstain"
-                self.voter = voter.split(" abstained.</span>")[0]
+                voter = voter.split(" abstained.</span>")[0]
             if verdict == "guilty":
                 self.verdict = "Guilty"
-                self.voter = voter.split(" voted guilty.</span>")[0]
+                voter = voter.split(" voted guilty.</span>")[0]
             if verdict == "innocent":
                 self.verdict = "Innocent"
-                self.voter = voter.split(" voted innocent.</span>")[0]
+                voter = voter.split(" voted innocent.</span>")[0]
+            self.voter = _get_player(voter, all_players)
 
         elif '<span class="notice' in message and 'has been resurrected.</span>' in message:
             self.type = "Revive"
@@ -622,13 +624,17 @@ class Event:
             self.type = "Transport"
             msg = message.split('">Transporter swapped ')[1].split(" with ")
             transported1 = _get_player(msg[0], all_players)
+            if not transported1:
+                msg = message.split('">Transporter swapped ')[
+                    1].rsplit(" with ", maxsplit=1)
+                transported1 = _get_player(msg[0], all_players)
             transported2 = _get_player(
                 msg[1].split(".</span>")[0], all_players)
             if not transported2:
                 msg = message.split('">Transporter swapped ')[
-                    1].rsplit(" with ")
+                    1].split(" with ", maxsplit=1)
                 transported2 = _get_player(
-                    msg[0].split(".</span>")[0], all_players)
+                    msg[1].split(".</span>")[0], all_players)
             self.transported = [transported1, transported2]
 
         elif '<span class="notice"' in message and "has revealed themselves as the Mayor.</span>" in message:
