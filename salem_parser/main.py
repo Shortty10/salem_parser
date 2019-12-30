@@ -653,13 +653,15 @@ class Event:
             try:
                 name = message.split('<span class="')[1].split(" ")[0]
             except IndexError:
-                name = ""
+                name = None
+
+                try:
+                    name = message.split('<span class="')[1].split(
+                        " ")[0] + " " + message.split('<span class="')[1].split(" ")[1]
+                except IndexError:
+                    name = ''
 
             author = _get_player(name, all_players)
-            if not name:
-                name = message.split('<span class="')[1].split(
-                    " ")[0] + " " + message.split('<span class="')[1].split(" ")[1]
-                author = _get_player(name, all_players)
 
             try:
                 details = message.split(": ")[1]
