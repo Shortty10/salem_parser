@@ -24,104 +24,8 @@ SOFTWARE.
 import json
 from datetime import datetime
 import requests
+
 from bs4 import BeautifulSoup
-
-
-def parse_report(url):
-    """
-    Parse the report's HTML into a Report object.
-
-    Parameters
-    -------------
-    url: :class:`str`
-        The report URL
-
-    Raises
-    -------------
-    ValueError
-        Parsing failed (Invalid ID / Glitched report)
-
-    Returns
-    -------------
-    :class:`Report`
-        The Report object.
-    """
-    request = requests.get(url).text
-    if request in ["Could not find any reports with that ID.", "No report file found."]:
-        raise ValueError("Report not found.")
-    soup = BeautifulSoup(request, "lxml")
-
-    data = {}
-
-    judgement = soup.find("div", id="splash")
-    if not judgement:
-        judgement = "Open"
-    elif judgement.text == "This report has been closed without judgement.":
-        judgement = "Closed"
-    elif judgement.text == "This report has been deemed guilty.":
-        judgement = "Guilty"
-    elif judgement.text == "This report has been deemed innocent.":
-        judgement = "Innocent"
-
-    data['judgement'] = judgement
-
-    data['id'] = soup.find("span", class_="reportId").text
-
-    data['user'] = soup.find("span", class_="reportedPlayer").text
-
-    data['reason'] = soup.find("span", class_="reportReason").text
-
-    data['ranked'] = bool("Ranked Game." in soup.find(
-        "span", class_="notice").text)
-
-    data['players'] = str(soup.find_all("script")).split(
-        'data =')[1].split("}]};")[0] + "}]}"
-
-    data['content'] = list(
-        soup.find("div", id="reportContent").find_all("span"))
-
-    data['date'] = soup.find("span", class_="reportDate").text
-
-    data['details'] = str(soup.find("span", class_='reportDescription')).split(
-        '<span class="reportDescription">')[1].split('</span>')[0].split("<br/>")
-
-    data['details'] = [] if data['details'] == [''] else data['details']
-
-    # Unescape HTML
-    data['details'] = [msg.replace("&gt;", ">").replace(
-        "&amp;", "&") for msg in data['details']]
-
-    try:
-        return Report(data)
-    except Exception:
-        raise ValueError("There was an error processing this report.")
-
-
-def _get_player(name, players):
-    data = {}
-    data['all_players'] = players
-    players = json.loads(players)["players"]
-
-    # Fix bugged usernames
-    if "(" in name:
-        name = name.split("(")[0]
-
-    # Check if 'name' is a username
-    if name in [x["username"] for x in players]:
-        data['name'] = name
-        data['type'] = "username"
-        return Player(data)
-
-    # Check if 'name' is an IGN
-    if name in [x["ign"] for x in players]:
-        data['name'] = name
-        data['type'] = "ign"
-        return Player(data)
-
-    # Otherwise, the report is bugged.
-    # This is extremely rare (occurs in about 0.3% of reports).
-    # Returns None to avoid an error.
-    return None
 
 
 class Report:
@@ -725,6 +629,103 @@ class Player:
 
     def __repr__(self):
         return self.nick
+
+
+def parse_report(url: str) -> Report:
+    """
+    Parse the report's HTML into a Report object.
+
+    Parameters
+    -------------
+    url: :class:`str`
+        The report URL
+
+    Raises
+    -------------
+    ValueError
+        Parsing failed (Invalid ID / Glitched report)
+
+    Returns
+    -------------
+    :class:`Report`
+        The Report object.
+    """
+    request = requests.get(url).text
+    if request in ["Could not find any reports with that ID.", "No report file found."]:
+        raise ValueError("Report not found.")
+    soup = BeautifulSoup(request, "lxml")
+
+    data = {}
+
+    judgement = soup.find("div", id="splash")
+    if not judgement:
+        judgement = "Open"
+    elif judgement.text == "This report has been closed without judgement.":
+        judgement = "Closed"
+    elif judgement.text == "This report has been deemed guilty.":
+        judgement = "Guilty"
+    elif judgement.text == "This report has been deemed innocent.":
+        judgement = "Innocent"
+
+    data['judgement'] = judgement
+
+    data['id'] = soup.find("span", class_="reportId").text
+
+    data['user'] = soup.find("span", class_="reportedPlayer").text
+
+    data['reason'] = soup.find("span", class_="reportReason").text
+
+    data['ranked'] = bool("Ranked Game." in soup.find(
+        "span", class_="notice").text)
+
+    data['players'] = str(soup.find_all("script")).split(
+        'data =')[1].split("}]};")[0] + "}]}"
+
+    data['content'] = list(
+        soup.find("div", id="reportContent").find_all("span"))
+
+    data['date'] = soup.find("span", class_="reportDate").text
+
+    data['details'] = str(soup.find("span", class_='reportDescription')).split(
+        '<span class="reportDescription">')[1].split('</span>')[0].split("<br/>")
+
+    data['details'] = [] if data['details'] == [''] else data['details']
+
+    # Unescape HTML
+    data['details'] = [msg.replace("&gt;", ">").replace(
+        "&amp;", "&") for msg in data['details']]
+
+    try:
+        return Report(data)
+    except Exception:
+        raise ValueError("There was an error processing this report.")
+
+
+def _get_player(name, players) -> Player:
+    data = {}
+    data['all_players'] = players
+    players = json.loads(players)["players"]
+
+    # Fix bugged usernames
+    if "(" in name:
+        name = name.split("(")[0]
+
+    # Check if 'name' is a username
+    if name in [x["username"] for x in players]:
+        data['name'] = name
+        data['type'] = "username"
+        return Player(data)
+
+    # Check if 'name' is an IGN
+    if name in [x["ign"] for x in players]:
+        data['name'] = name
+        data['type'] = "ign"
+        return Player(data)
+
+    # Otherwise, the report is bugged.
+    # This is extremely rare (occurs in about 0.3% of reports).
+    # Returns None to avoid an error.
+    return None
 
 
 def _find_faction(role):
